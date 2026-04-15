@@ -34,11 +34,11 @@ client.on('messageCreate', async (message) => {
                 .setColor(0x5865F2)
                 .setFooter({ text: 'Mystic Destek Sistemi' });
 
-            // İSTEDİĞİN BUTONLAR BURADA
+            // 5 ADET SEÇENEK BUTONU
             const row1 = new ActionRowBuilder().addComponents(
                 new ButtonBuilder().setCustomId('tk_partner').setLabel('Partnerlik ⭐').setStyle(ButtonStyle.Secondary),
-                new ButtonBuilder().setCustomId('tk_soru').setLabel('Pack Soruları 💖').setStyle(ButtonStyle.Secondary),
-                new ButtonBuilder().setCustomId('tk_isbirliği').setLabel('İşbirliği 😈').setStyle(ButtonStyle.Secondary)
+                new ButtonBuilder().setCustomId('tk_soru').setLabel('Pack Hakkında Sorular 💖').setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId('tk_isbirligi').setLabel('İşbirliği 😈').setStyle(ButtonStyle.Secondary)
             );
             const row2 = new ActionRowBuilder().addComponents(
                 new ButtonBuilder().setCustomId('tk_reklam').setLabel('Reklam 📺').setStyle(ButtonStyle.Secondary),
@@ -47,7 +47,7 @@ client.on('messageCreate', async (message) => {
 
             await ticketChannel.send({ embeds: [ticketEmbed], components: [row1, row2] });
         }
-        message.reply("✅ Yeni butonlu destek sistemi kuruldu!");
+        message.reply("✅ Yeni butonlu destek sistemi ve bilet kapatma özelliği kuruldu!");
     }
 
     // Çekiliş Komutu
@@ -69,52 +69,4 @@ client.on('messageCreate', async (message) => {
     }
 });
 
-// --- ETKİLEŞİMLER (BİLET AÇMA MANTIĞI) ---
-client.on('interactionCreate', async (interaction) => {
-    if (!interaction.isButton()) return;
-
-    if (interaction.customId.startsWith('tk_')) {
-        let biletIsmi = "";
-        let biletKonusu = "";
-
-        if (interaction.customId === 'tk_partner') { biletIsmi = "partner"; biletKonusu = "Partnerlik"; }
-        if (interaction.customId === 'tk_soru') { biletIsmi = "pack-soru"; biletKonusu = "Pack Hakkında Sorular"; }
-        if (interaction.customId === 'tk_isbirliği') { biletIsmi = "isbirliği"; biletKonusu = "İşbirliği"; }
-        if (interaction.customId === 'tk_reklam') { biletIsmi = "reklam"; biletKonusu = "Reklam"; }
-        if (interaction.customId === 'tk_paylasim') { biletIsmi = "pack-paylasim"; biletKonusu = "Pack Paylaşımı"; }
-
-        try {
-            const biletKanal = await interaction.guild.channels.create({
-                name: `${biletIsmi}-${interaction.user.username}`,
-                type: ChannelType.GuildText,
-                permissionOverwrites: [
-                    { id: interaction.guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
-                    { id: interaction.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] }
-                ]
-            });
-
-            await interaction.reply({ content: `Biletin açıldı: ${biletKanal}`, ephemeral: true });
-            
-            biletKanal.send(`Hoş geldin ${interaction.user},\n\n**Konu: ${biletKonusu}**\nEn kısa sürede yetkililer ilgilenecektir. ✨`);
-        } catch (error) {
-            console.error(error);
-        }
-    }
-
-    // Çekiliş butonları
-    if (interaction.customId === 'cekilis_katil') {
-        if (cekilisKatilimcilari.has(interaction.user.id)) return interaction.reply({ content: 'Zaten katıldın!', ephemeral: true });
-        cekilisKatilimcilari.add(interaction.user.id);
-        await interaction.reply({ content: 'Çekilişe katıldın! 🍀', ephemeral: true });
-    }
-
-    if (interaction.customId === 'cekilis_bitir') {
-        if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) return;
-        const katilimcilar = Array.from(cekilisKatilimcilari);
-        if (katilimcilar.length === 0) return interaction.reply({ content: 'Katılımcı yok!', ephemeral: true });
-        const kazananId = katilimcilar[Math.floor(Math.random() * katilimcilar.length)];
-        await interaction.update({ content: `🎉 Çekiliş bitti! Kazanan: <@${kazananId}>`, components: [], embeds: [] });
-    }
-});
-
-client.login(process.env.DISCORD_TOKEN);
+// --- ETKİLEŞİMLER (B
