@@ -1,4 +1,4 @@
-const { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType, PermissionsBitField } = require('discord.js');
+const { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType, PermissionsBitField, AttachmentBuilder, StringSelectMenuBuilder, StringSelectMenuOptionBuilder } = require('discord.js');
 
 const client = new Client({
     intents: [
@@ -34,7 +34,6 @@ client.on('messageCreate', async (message) => {
                 .setColor(0x5865F2)
                 .setFooter({ text: 'Mystic Destek Sistemi' });
 
-            // 5 ADET SEÇENEK BUTONU
             const row1 = new ActionRowBuilder().addComponents(
                 new ButtonBuilder().setCustomId('tk_partner').setLabel('Partnerlik ⭐').setStyle(ButtonStyle.Secondary),
                 new ButtonBuilder().setCustomId('tk_soru').setLabel('Pack Hakkında Sorular 💖').setStyle(ButtonStyle.Secondary),
@@ -47,7 +46,7 @@ client.on('messageCreate', async (message) => {
 
             await ticketChannel.send({ embeds: [ticketEmbed], components: [row1, row2] });
         }
-        message.reply("✅ Yeni butonlu destek sistemi ve bilet kapatma özelliği kuruldu!");
+        message.reply("✅ Gelişmiş Loglu bilet sistemi kuruldu!");
     }
 
     // Çekiliş Komutu
@@ -69,4 +68,117 @@ client.on('messageCreate', async (message) => {
     }
 });
 
-// --- ETKİLEŞİMLER (B
+// --- ETKİLEŞİMLER ---
+client.on('interactionCreate', async (interaction) => {
+
+    // 1. PUANLAMA MENÜSÜ CEVABI (Menü seçimi olduğunda çalışır)
+    if (interaction.isStringSelectMenu() && interaction.customId === 'ticket_puan') {
+        const puan = interaction.values[0];
+        await interaction.update({ 
+            content: `🌟 Destek hizmetimizi **${puan}/10** olarak değerlendirdiğiniz için teşekkür ederiz!`, 
+            components: [] 
+        });
+        return;
+    }
+
+    if (!interaction.isButton()) return;
+
+    // 2. BİLET AÇMA
+    if (interaction.customId.startsWith('tk_')) {
+        let biletIsmi = "";
+        let biletKonusu = "";
+
+        if (interaction.customId === 'tk_partner') { biletIsmi = "partner"; biletKonusu = "Partnerlik"; }
+        if (interaction.customId === 'tk_soru') { biletIsmi = "pack-soru"; biletKonusu = "Pack Hakkında Sorular"; }
+        if (interaction.customId === 'tk_isbirligi') { biletIsmi = "isbirligi"; biletKonusu = "İşbirliği"; }
+        if (interaction.customId === 'tk_reklam') { biletIsmi = "reklam"; biletKonusu = "Reklam"; }
+        if (interaction.customId === 'tk_paylasim') { biletIsmi = "pack-paylasim"; biletKonusu = "Pack Paylaşımı"; }
+
+        try {
+            const biletKanal = await interaction.guild.channels.create({
+                name: `${biletIsmi}-${interaction.user.username}`,
+                type: ChannelType.GuildText,
+                topic: interaction.user.id, // BİLETİ AÇANIN ID'SİNİ BURAYA KAYDEDİYORUZ (DM İÇİN LAZIM)
+                permissionOverwrites: [
+                    { id: interaction.guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
+                    { id: interaction.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] }
+                ]
+            });
+
+            await interaction.reply({ content: `Biletin açıldı: ${biletKanal}`, ephemeral: true });
+            
+            const kapatButonu = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId('bilet_kapat').setLabel('🔒 Bileti Kapat').setStyle(ButtonStyle.Danger)
+            );
+
+            biletKanal.send({ 
+                content: `Hoş geldin ${interaction.user},\n\n**Konu: ${biletKonusu}**\nEn kısa sürede yetkililer ilgilenecektir. ✨`,
+                components: [kapatButonu]
+            });
+        } catch (error) {
+            console.error(error);
+        }
+    }
+
+    // 3. BİLETİ KAPATMA, LOG ALMA VE DM ATMA
+    if (interaction.customId === 'bilet_kapat') {
+        await interaction.reply({ content: '🔒 Bilet kapatılıyor, loglar hazırlanıp DM üzerinden iletilecek...' });
+        
+        const channel = interaction.channel;
+        const ticketOwnerId = channel.topic; // Açarken kaydettiğimiz ID
+
+        try {
+            // Mesajları çek ve TXT dosyası yap
+            const messages = await channel.messages.fetch({ limit: 100 });
+            const logText = messages.reverse().map(m => `[${m.createdAt.toLocaleString()}] ${m.author.tag}: ${m.content}`).join('\n');
+            const attachment = new AttachmentBuilder(Buffer.from(logText, 'utf-8'), { name: `${channel.name}-log.txt` });
+
+            // 1'den 10'a kadar puanlama menüsü oluştur
+            const puanMenu = new StringSelectMenuBuilder()
+                .setCustomId('ticket_puan')
+                .setPlaceholder('Hizmetimizi 10 üzerinden değerlendirin')
+                .addOptions(
+                    Array.from({ length: 10 }, (_, i) => 
+                        new StringSelectMenuOptionBuilder().setLabel(`${i + 1} Puan`).setValue(`${i + 1}`)
+                    )
+                );
+            const menuRow = new ActionRowBuilder().addComponents(puanMenu);
+
+            // Bileti açan kişiyi bul ve DM at
+            if (ticketOwnerId) {
+                const owner = await client.users.fetch(ticketOwnerId).catch(() => null);
+                if (owner) {
+                    await owner.send({
+                        content: `Merhaba! **${interaction.guild.name}** sunucusundaki destek biletiniz kapatıldı. Görüşmelerin kaydı ektedir.\n\nLütfen aldığınız desteği 10 üzerinden değerlendirin:`,
+                        files: [attachment],
+                        components: [menuRow]
+                    }).catch(() => console.log("Kullanıcının DM'i kapalı, mesaj iletilemedi."));
+                }
+            }
+        } catch (err) {
+            console.error("Log kaydetme hatası:", err);
+        }
+
+        // Mesajları attıktan 5 saniye sonra kanalı sil
+        setTimeout(() => {
+            channel.delete().catch(console.error);
+        }, 5000);
+    }
+
+    // 4. ÇEKİLİŞ BUTONLARI
+    if (interaction.customId === 'cekilis_katil') {
+        if (cekilisKatilimcilari.has(interaction.user.id)) return interaction.reply({ content: 'Zaten katıldın!', ephemeral: true });
+        cekilisKatilimcilari.add(interaction.user.id);
+        await interaction.reply({ content: 'Çekilişe katıldın! 🍀', ephemeral: true });
+    }
+
+    if (interaction.customId === 'cekilis_bitir') {
+        if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) return;
+        const katilimcilar = Array.from(cekilisKatilimcilari);
+        if (katilimcilar.length === 0) return interaction.reply({ content: 'Katılımcı yok!', ephemeral: true });
+        const kazananId = katilimcilar[Math.floor(Math.random() * katilimcilar.length)];
+        await interaction.update({ content: `🎉 Çekiliş bitti! Kazanan: <@${kazananId}>`, components: [], embeds: [] });
+    }
+});
+
+client.login(process.env.DISCORD_TOKEN);
